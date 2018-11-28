@@ -21,13 +21,15 @@ import com.github.tomakehurst.wiremock.core.FaultInjector;
 import com.github.tomakehurst.wiremock.core.WireMockApp;
 import com.github.tomakehurst.wiremock.http.*;
 import com.github.tomakehurst.wiremock.verification.LoggedRequest;
+import com.google.common.io.ByteStreams;
 
 import javax.servlet.*;
 import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
-import java.util.concurrent.TimeUnit;
+import java.io.InputStream;
+import java.util.concurrent.ScheduledExecutorService;
 
 import static com.github.tomakehurst.wiremock.common.Exceptions.throwUnchecked;
 import static com.github.tomakehurst.wiremock.http.RequestMethod.GET;
@@ -35,13 +37,18 @@ import static com.github.tomakehurst.wiremock.servlet.WireMockHttpServletRequest
 import static com.google.common.base.Charsets.UTF_8;
 import static java.net.HttpURLConnection.HTTP_NOT_FOUND;
 import static java.net.URLDecoder.decode;
+import static java.util.concurrent.Executors.newScheduledThreadPool;
+import static java.util.concurrent.TimeUnit.MILLISECONDS;
 
 public class WireMockHandlerDispatchingServlet extends HttpServlet {
 
-	public static final String SHOULD_FORWARD_TO_FILES_CONTEXT = "shouldForwardToFilesContext";
-	public static final String MAPPED_UNDER_KEY = "mappedUnder";
+    public static final String SHOULD_FORWARD_TO_FILES_CONTEXT = "shouldForwardToFilesContext";
+    public static final String ASYNCHRONOUS_RESPONSE_EXECUTOR = WireMockHandlerDispatchingServlet.class.getSimpleName() + ".asynchronousResponseExecutor";
+    public static final String MAPPED_UNDER_KEY = "mappedUnder";
 
 	private static final long serialVersionUID = -6602042274260495538L;
+
+    private ScheduledExecutorService scheduledExecutorService;
 
     private RequestHandler requestHandler;
     private FaultInjectorFactory faultHandlerFactory;
@@ -59,6 +66,8 @@ public class WireMockHandlerDispatchingServlet extends HttpServlet {
 	        wiremockFileSourceRoot = context.getInitParameter("WireMockFileSourceRoot");
 	    }
 
+        scheduledExecutorService = (ScheduledExecutorService) config.getServletContext().getAttribute(ASYNCHRONOUS_RESPONSE_EXECUTOR);
+
         String handlerClassName = config.getInitParameter(RequestHandler.HANDLER_CLASS_KEY);
 		String faultInjectorFactoryClassName = config.getInitParameter(FaultInjectorFactory.INJECTOR_CLASS_KEY);
 		mappedUnder = getNormalizedMappedUnder(config);
@@ -73,10 +82,6 @@ public class WireMockHandlerDispatchingServlet extends HttpServlet {
 		notifier = (Notifier) context.getAttribute(Notifier.KEY);
 	}
 
-	/**
-	 * @param config Servlet configuration to read
-	 * @return Normalized mappedUnder attribute without trailing slash
-	*/
 	private String getNormalizedMappedUnder(ServletConfig config) {
 		String mappedUnder = config.getInitParameter(MAPPED_UNDER_KEY);
 		if(mappedUnder == null) {
@@ -114,15 +119,53 @@ public class WireMockHandlerDispatchingServlet extends HttpServlet {
 		}
 
 		@Override
-		public void respond(Request request, Response response) {
-            if (Thread.currentThread().isInterrupted()) {
-                return;
+		public void respond(final Request request, final Response response) {
+			if (Thread.currentThread().isInterrupted()) {
+				return;
+			}
+
+			httpServletRequest.setAttribute(ORIGINAL_REQUEST_KEY, LoggedRequest.createFrom(request));
+
+            if (isAsyncSupported(response, httpServletRequest)) {
+                respondAsync(request, response);
+            } else {
+                respondSync(request, response);
             }
+        }
 
-            httpServletRequest.setAttribute(ORIGINAL_REQUEST_KEY, LoggedRequest.createFrom(request));
-
+        private void respondSync(Request request, Response response) {
             delayIfRequired(response.getInitialDelay());
+            respondTo(request, response);
+        }
 
+
+        private void delayIfRequired(long delayMillis) {
+            try {
+                MILLISECONDS.sleep(delayMillis);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+        }
+
+        private boolean isAsyncSupported(Response response, HttpServletRequest httpServletRequest) {
+            return scheduledExecutorService != null && response.getInitialDelay() > 0 && httpServletRequest.isAsyncSupported();
+        }
+
+        private void respondAsync(final Request request, final Response response) {
+            final AsyncContext asyncContext = httpServletRequest.startAsync();
+            scheduledExecutorService.schedule(new Runnable() {
+                @Override
+                public void run() {
+                    try {
+                        respondTo(request, response);
+                    } finally {
+                        asyncContext.complete();
+                    }
+                }
+            }, response.getInitialDelay(), MILLISECONDS);
+        }
+
+        private void respondTo(Request request, Response response) {
             try {
                 if (response.wasConfigured()) {
                     applyResponse(response, httpServletRequest, httpServletResponse);
@@ -135,15 +178,7 @@ public class WireMockHandlerDispatchingServlet extends HttpServlet {
                 throwUnchecked(e);
             }
         }
-
-		private void delayIfRequired(long delayMillis) {
-			try {
-				TimeUnit.MILLISECONDS.sleep(delayMillis);
-			} catch (InterruptedException e) {
-				Thread.currentThread().interrupt();
-			}
-		}
-	}
+    }
 
     public void applyResponse(Response response, HttpServletRequest httpServletRequest, HttpServletResponse httpServletResponse) {
         Fault fault = response.getFault();
@@ -167,9 +202,9 @@ public class WireMockHandlerDispatchingServlet extends HttpServlet {
         }
 
         if (response.shouldAddChunkedDribbleDelay()) {
-			writeAndTranslateExceptionsWithChunkedDribbleDelay(httpServletResponse, response.getBody(), response.getChunkedDribbleDelay());
+			writeAndTranslateExceptionsWithChunkedDribbleDelay(httpServletResponse, response.getBodyStream(), response.getChunkedDribbleDelay());
 		} else {
-			writeAndTranslateExceptions(httpServletResponse, response.getBody());
+			writeAndTranslateExceptions(httpServletResponse, response.getBodyStream());
 		}
     }
 
@@ -177,20 +212,24 @@ public class WireMockHandlerDispatchingServlet extends HttpServlet {
 	    return faultHandlerFactory.buildFaultInjector(httpServletRequest, httpServletResponse);
 	}
 
-    private static void writeAndTranslateExceptions(HttpServletResponse httpServletResponse, byte[] content) {
-        try {
-            ServletOutputStream out = httpServletResponse.getOutputStream();
-            out.write(content);
+    private static void writeAndTranslateExceptions(HttpServletResponse httpServletResponse, InputStream content) {
+        try (ServletOutputStream out = httpServletResponse.getOutputStream()) {
+            ByteStreams.copy(content, out);
             out.flush();
-            out.close();
         } catch (IOException e) {
             throwUnchecked(e);
+        } finally {
+            try {
+                content.close();
+            } catch (IOException e) {
+                // well, we tried
+            }
         }
     }
 
-	private void writeAndTranslateExceptionsWithChunkedDribbleDelay(HttpServletResponse httpServletResponse, byte[] body, ChunkedDribbleDelay chunkedDribbleDelay) {
-
-		try (ServletOutputStream out = httpServletResponse.getOutputStream()) {
+    private void writeAndTranslateExceptionsWithChunkedDribbleDelay(HttpServletResponse httpServletResponse, InputStream bodyStream, ChunkedDribbleDelay chunkedDribbleDelay) {
+        try (ServletOutputStream out = httpServletResponse.getOutputStream()) {
+            byte[] body = ByteStreams.toByteArray(bodyStream);
 
 			if (body.length < 1) {
 				notifier.error("Cannot chunk dribble delay when no body set");

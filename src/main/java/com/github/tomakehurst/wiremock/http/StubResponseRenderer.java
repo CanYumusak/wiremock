@@ -19,17 +19,18 @@ import com.github.tomakehurst.wiremock.common.BinaryFile;
 import com.github.tomakehurst.wiremock.common.FileSource;
 import com.github.tomakehurst.wiremock.extension.ResponseTransformer;
 import com.github.tomakehurst.wiremock.global.GlobalSettingsHolder;
-import com.google.common.base.Optional;
+import com.github.tomakehurst.wiremock.stubbing.ServeEvent;
+import com.github.tomakehurst.wiremock.stubbing.StubMapping;
+import com.google.common.base.MoreObjects;
 
-import java.util.concurrent.TimeUnit;
 import java.util.List;
 
 import static com.github.tomakehurst.wiremock.core.WireMockApp.FILES_ROOT;
-
 import static com.github.tomakehurst.wiremock.http.Response.response;
+import static com.google.common.base.MoreObjects.firstNonNull;
 
 public class StubResponseRenderer implements ResponseRenderer {
-	
+
 	private final FileSource fileSource;
 	private final GlobalSettingsHolder globalSettingsHolder;
 	private final ProxyResponseRenderer proxyResponseRenderer;
@@ -46,22 +47,21 @@ public class StubResponseRenderer implements ResponseRenderer {
 	}
 
 	@Override
-	public Response render(ResponseDefinition responseDefinition) {
-		if (!responseDefinition.wasConfigured()) {
+	public Response render(ServeEvent serveEvent) {
+        ResponseDefinition responseDefinition = serveEvent.getResponseDefinition();
+        if (!responseDefinition.wasConfigured()) {
 			return Response.notConfigured();
 		}
 
-		Response response = buildResponse(responseDefinition);
+		Response response = buildResponse(serveEvent);
 		return applyTransformations(responseDefinition.getOriginalRequest(), responseDefinition, response, responseTransformers);
 	}
 
-	private Response buildResponse(ResponseDefinition responseDefinition) {
-		if (responseDefinition.isProxyResponse()) {
-			return proxyResponseRenderer.render(responseDefinition);
+	private Response buildResponse(ServeEvent serveEvent) {
+		if (serveEvent.getResponseDefinition().isProxyResponse()) {
+			return proxyResponseRenderer.render(serveEvent);
 		} else {
-			Response.Builder responseBuilder = renderDirectly(responseDefinition);
-			addDelayIfSpecifiedGloballyOrIn(responseDefinition, responseBuilder);
-			addRandomDelayIfSpecifiedGloballyOrIn(responseDefinition, responseBuilder);
+			Response.Builder responseBuilder = renderDirectly(serveEvent);
 			return responseBuilder.build();
 		}
 	}
@@ -77,23 +77,43 @@ public class StubResponseRenderer implements ResponseRenderer {
 		ResponseTransformer transformer = transformers.get(0);
 		Response newResponse =
 				transformer.applyGlobally() || responseDefinition.hasTransformer(transformer) ?
-						transformer.transform(request, response, fileSource.child(FILES_ROOT), responseDefinition.getTransformerParameters()) :
+						transformer.transform(request, response, fileSource, responseDefinition.getTransformerParameters()) :
 						response;
 
 		return applyTransformations(request, responseDefinition, newResponse, transformers.subList(1, transformers.size()));
 	}
 
-	private Response.Builder renderDirectly(ResponseDefinition responseDefinition) {
+	private Response.Builder renderDirectly(ServeEvent serveEvent) {
+        ResponseDefinition responseDefinition = serveEvent.getResponseDefinition();
+
+        HttpHeaders headers = responseDefinition.getHeaders();
+        StubMapping stubMapping = serveEvent.getStubMapping();
+        if (serveEvent.getWasMatched() && stubMapping != null) {
+            headers =
+                firstNonNull(headers, new HttpHeaders())
+                .plus(new HttpHeader("Matched-Stub-Id", stubMapping.getId().toString()));
+
+            if (stubMapping.getName() != null) {
+                headers = headers.plus(new HttpHeader("Matched-Stub-Name", stubMapping.getName()));
+            }
+        }
+
         Response.Builder responseBuilder = response()
                 .status(responseDefinition.getStatus())
 				.statusMessage(responseDefinition.getStatusMessage())
-                .headers(responseDefinition.getHeaders())
+                .headers(headers)
                 .fault(responseDefinition.getFault())
+				.configureDelay(
+					globalSettingsHolder.get().getFixedDelay(),
+					globalSettingsHolder.get().getDelayDistribution(),
+					responseDefinition.getFixedDelayMilliseconds(),
+					responseDefinition.getDelayDistribution()
+				)
 				.chunkedDribbleDelay(responseDefinition.getChunkedDribbleDelay());
 
 		if (responseDefinition.specifiesBodyFile()) {
 			BinaryFile bodyFile = fileSource.getBinaryFileNamed(responseDefinition.getBodyFileName());
-            responseBuilder.body(bodyFile.readContents());
+            responseBuilder.body(bodyFile);
 		} else if (responseDefinition.specifiesBodyContent()) {
             if(responseDefinition.specifiesBinaryBodyContent()) {
                 responseBuilder.body(responseDefinition.getByteBody());
@@ -104,33 +124,4 @@ public class StubResponseRenderer implements ResponseRenderer {
 
         return responseBuilder;
 	}
-	
-    private void addDelayIfSpecifiedGloballyOrIn(ResponseDefinition responseDefinition, Response.Builder responseBuilder) {
-    	Optional<Integer> optionalDelay = getDelayFromResponseOrGlobalSetting(responseDefinition);
-        if (optionalDelay.isPresent()) {
-        	responseBuilder.incrementInitialDelay(optionalDelay.get());
-	    }
-    }
-    
-    private Optional<Integer> getDelayFromResponseOrGlobalSetting(ResponseDefinition responseDefinition) {
-    	Integer delay = responseDefinition.getFixedDelayMilliseconds() != null ?
-    			responseDefinition.getFixedDelayMilliseconds() :
-    			globalSettingsHolder.get().getFixedDelay();
-    	
-    	return Optional.fromNullable(delay);
-    }
-
-    private void addRandomDelayIfSpecifiedGloballyOrIn(ResponseDefinition responseDefinition, Response.Builder responseBuilder) {
-		DelayDistribution delayDistribution;
-
-		if (responseDefinition.getDelayDistribution() != null) {
-			delayDistribution = responseDefinition.getDelayDistribution();
-		} else {
-			delayDistribution = globalSettingsHolder.get().getDelayDistribution();
-		}
-
-		if (delayDistribution != null) {
-			responseBuilder.incrementInitialDelay(delayDistribution.sampleMillis());
-		}
-    }
 }

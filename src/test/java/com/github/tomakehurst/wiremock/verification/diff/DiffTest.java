@@ -19,6 +19,7 @@ import com.github.tomakehurst.wiremock.http.Request;
 import com.github.tomakehurst.wiremock.matching.MatchResult;
 import com.github.tomakehurst.wiremock.matching.RequestMatcher;
 import com.github.tomakehurst.wiremock.matching.RequestPatternBuilder;
+import com.github.tomakehurst.wiremock.matching.ValueMatcher;
 import org.junit.Test;
 
 import static com.github.tomakehurst.wiremock.client.WireMock.*;
@@ -341,7 +342,31 @@ public class DiffTest {
                 "ANY\n" +
                 "/thing\n" +
                 "\n" +
-                "Cookie: my_cookie=actual-cookie\n"
+                "actual-cookie\n"
+            )
+        ));
+    }
+
+    @Test
+    public void showsQueryParametersInDiffWhenNotMatching() {
+        Diff diff = new Diff(
+            newRequestPattern(ANY, urlPathEqualTo("/thing"))
+                .withQueryParam("search", equalTo("everything"))
+                .build(),
+            mockRequest().url("/thing?search=nothing")
+        );
+
+        assertThat(diff.toString(), is(
+            junitStyleDiffMessage(
+                "ANY\n" +
+                    "/thing?search=nothing\n" +
+                    "\n" +
+                    "Query: search = everything\n",
+
+                "ANY\n" +
+                    "/thing?search=nothing\n" +
+                    "\n" +
+                    "search: nothing\n"
             )
         ));
     }
@@ -369,22 +394,57 @@ public class DiffTest {
     }
 
     @Test
-    public void showsAGenericMessageWhenTheRequestMatcherIsCustom() {
+    public void indicatesThatAnInlineCustomMatcherDidNotMatch() {
         Diff diff = new Diff(
-            RequestPatternBuilder.forCustomMatcher(new RequestMatcher() {
-                @Override
-                public MatchResult match(Request request) {
-                    return MatchResult.of(request.containsHeader("My-Header"));
-                }
-
-                @Override
-                public String getName() {
-                    return "custom-matcher";
-                }
-            }).build(),
-            mockRequest().url("/thing")
+                newRequestPattern(GET, urlEqualTo("/thing"))
+                        .andMatching(new ValueMatcher<Request>() {
+                            @Override
+                            public MatchResult match(Request value) {
+                                return MatchResult.noMatch();
+                            }
+                        })
+                        .build(),
+                mockRequest()
+                        .method(GET)
+                        .url("/thing")
         );
 
-        assertThat(diff.toString(), is("(Request pattern had a custom matcher so no diff can be shown)"));
+        assertThat(diff.toString(), is(
+                junitStyleDiffMessage(
+                        "GET\n" +
+                                "/thing\n" +
+                                "\n" +
+                                "[custom matcher]",
+
+                        "GET\n" +
+                                "/thing\n\n "
+                )
+        ));
+    }
+
+    @Test
+    public void indicatesThatANamedCustomMatcherDidNotMatch() {
+        Diff diff = new Diff(
+                newRequestPattern(GET, urlEqualTo("/thing"))
+                        .andMatching("my-custom-matcher")
+                        .build(),
+                mockRequest()
+                        .method(GET)
+                        .url("/thing")
+        );
+
+        assertThat(diff.toString(), is(
+                junitStyleDiffMessage(
+                        "GET\n" +
+                                "/thing\n" +
+                                "\n" +
+                                "[custom matcher: my-custom-matcher]",
+
+                        "GET\n" +
+                                "/thing\n" +
+                                "\n" +
+                                "[custom matcher: my-custom-matcher]"
+                )
+        ));
     }
 }

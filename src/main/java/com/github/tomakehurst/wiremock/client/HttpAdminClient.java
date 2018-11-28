@@ -27,12 +27,12 @@ import com.github.tomakehurst.wiremock.http.HttpClientFactory;
 import com.github.tomakehurst.wiremock.http.HttpHeader;
 import com.github.tomakehurst.wiremock.http.HttpStatus;
 import com.github.tomakehurst.wiremock.matching.RequestPattern;
+import com.github.tomakehurst.wiremock.matching.StringValuePattern;
 import com.github.tomakehurst.wiremock.recording.RecordSpecBuilder;
 import com.github.tomakehurst.wiremock.recording.RecordingStatusResult;
 import com.github.tomakehurst.wiremock.recording.SnapshotRecordResult;
 import com.github.tomakehurst.wiremock.recording.RecordSpec;
 import com.github.tomakehurst.wiremock.security.ClientAuthenticator;
-import com.github.tomakehurst.wiremock.security.NoClientAuthenticator;
 import com.github.tomakehurst.wiremock.security.NotAuthorisedException;
 import com.github.tomakehurst.wiremock.stubbing.StubMapping;
 import com.github.tomakehurst.wiremock.verification.FindNearMissesResult;
@@ -125,7 +125,7 @@ public class HttpAdminClient implements Admin {
 
     @Override
     public void addStubMapping(StubMapping stubMapping) {
-        if (stubMapping.getRequest().hasCustomMatcher()) {
+        if (stubMapping.getRequest().hasInlineCustomMatcher()) {
             throw new AdminException("Custom matchers can't be used when administering a remote WireMock server. " +
                     "Use WireMockRule.stubFor() or WireMockServer.stubFor() to administer the local instance.");
         }
@@ -343,6 +343,24 @@ public class HttpAdminClient implements Admin {
     @Override
     public void shutdownServer() {
         postJsonAssertOkAndReturnBody(urlFor(ShutdownServerTask.class), null);
+    }
+
+    @Override
+    public ListStubMappingsResult findAllStubsByMetadata(StringValuePattern pattern) {
+        return executeRequest(
+            adminRoutes.requestSpecForTask(FindStubMappingsByMetadataTask.class),
+            pattern,
+            ListStubMappingsResult.class
+        );
+    }
+
+    @Override
+    public void removeStubsByMetadata(StringValuePattern pattern) {
+        executeRequest(
+            adminRoutes.requestSpecForTask(RemoveStubMappingsByMetadataTask.class),
+            pattern,
+            Void.class
+        );
     }
 
     public int port() {

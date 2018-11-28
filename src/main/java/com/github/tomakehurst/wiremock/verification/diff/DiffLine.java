@@ -1,3 +1,18 @@
+/*
+ * Copyright (C) 2011 Thomas Akehurst
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package com.github.tomakehurst.wiremock.verification.diff;
 
 import com.github.tomakehurst.wiremock.matching.NamedValueMatcher;
@@ -6,10 +21,10 @@ import org.apache.commons.lang3.StringUtils;
 
 class DiffLine<V> {
 
-    private final String requestAttribute;
-    private final NamedValueMatcher<V> pattern;
-    private final V value;
-    private final String printedPatternValue;
+    protected final String requestAttribute;
+    protected final NamedValueMatcher<V> pattern;
+    protected final V value;
+    protected final String printedPatternValue;
 
     public DiffLine(String requestAttribute, NamedValueMatcher<V> pattern, V value, String printedPatternValue) {
         this.requestAttribute = requestAttribute;
@@ -52,7 +67,7 @@ class DiffLine<V> {
             message += ". When using a regex, \"?\" should be \"\\\\?\"";
         }
 
-        if (pattern instanceof UrlPattern && !pattern.getExpected().startsWith("/")) {
+        if (pattern instanceof UrlPattern && pattern != UrlPattern.ANY && !pattern.getExpected().startsWith("/")) {
             message += ". URLs must start with a /";
         }
 

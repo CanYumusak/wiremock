@@ -25,17 +25,19 @@ import java.util.List;
 import java.util.Map;
 
 import static com.google.common.collect.Lists.newArrayList;
+import static com.google.common.collect.Lists.newLinkedList;
 import static com.google.common.collect.Maps.newLinkedHashMap;
 
 public class RequestPatternBuilder {
 
-    private UrlPattern url;
-    private RequestMethod method;
+    private UrlPattern url = UrlPattern.ANY;
+    private RequestMethod method = RequestMethod.ANY;
     private Map<String, MultiValuePattern> headers = newLinkedHashMap();
     private Map<String, MultiValuePattern> queryParams = newLinkedHashMap();
     private List<ContentPattern<?>> bodyPatterns = newArrayList();
     private Map<String, StringValuePattern> cookies = newLinkedHashMap();
     private BasicCredentials basicCredentials;
+    private List<MultipartValuePattern> multiparts = newLinkedList();
 
     private ValueMatcher<Request> customMatcher;
 
@@ -99,8 +101,11 @@ public class RequestPatternBuilder {
         if (requestPattern.getBodyPatterns() != null) {
             builder.bodyPatterns = requestPattern.getBodyPatterns();
         }
-        if (requestPattern.hasCustomMatcher()) {
+        if (requestPattern.hasInlineCustomMatcher()) {
             builder.customMatcher = requestPattern.getMatcher();
+        }
+        if (requestPattern.getMultipartPatterns() != null) {
+            builder.multiparts = requestPattern.getMultipartPatterns();
         }
         builder.basicCredentials = requestPattern.getBasicAuthCredentials();
         builder.customMatcherDefinition = requestPattern.getCustomMatcher();
@@ -146,20 +151,47 @@ public class RequestPatternBuilder {
         return this;
     }
 
+    public RequestPatternBuilder withRequestBodyPart(MultipartValuePattern multiPattern) {
+        if (multiPattern != null) {
+            multiparts.add(multiPattern);
+        }
+        return this;
+    }
+
+    public RequestPatternBuilder withAnyRequestBodyPart(MultipartValuePatternBuilder multiPatternBuilder) {
+        return withRequestBodyPart(multiPatternBuilder.matchingType(MultipartValuePattern.MatchingType.ANY).build());
+    }
+
+    public RequestPatternBuilder withAllRequestBodyParts(MultipartValuePatternBuilder multiPatternBuilder) {
+        return withRequestBodyPart(multiPatternBuilder.matchingType(MultipartValuePattern.MatchingType.ALL).build());
+    }
+
+    public RequestPatternBuilder andMatching(ValueMatcher<Request> customMatcher) {
+        this.customMatcher = customMatcher;
+        return this;
+    }
+
+    public RequestPatternBuilder andMatching(String customRequestMatcherName) {
+        return andMatching(customRequestMatcherName, Parameters.empty());
+    }
+
+    public RequestPatternBuilder andMatching(String customRequestMatcherName, Parameters parameters) {
+        this.customMatcherDefinition = new CustomMatcherDefinition(customRequestMatcherName, parameters);
+        return this;
+    }
+
     public RequestPattern build() {
-        return customMatcher != null ?
-            new RequestPattern(customMatcher) :
-            customMatcherDefinition != null ?
-                new RequestPattern(customMatcherDefinition) :
-                new RequestPattern(
-                    url,
-                    method,
-                    headers.isEmpty() ? null : headers,
-                    queryParams.isEmpty() ? null : queryParams,
-                    cookies.isEmpty() ? null : cookies,
-                    basicCredentials,
-                    bodyPatterns.isEmpty() ? null : bodyPatterns,
-                    null
-                );
+        return new RequestPattern(
+                url,
+                method,
+                headers.isEmpty() ? null : headers,
+                queryParams.isEmpty() ? null : queryParams,
+                cookies.isEmpty() ? null : cookies,
+                basicCredentials,
+                bodyPatterns.isEmpty() ? null : bodyPatterns,
+                customMatcherDefinition,
+                customMatcher,
+                multiparts.isEmpty() ? null : multiparts
+        );
     }
 }

@@ -1,8 +1,25 @@
+/*
+ * Copyright (C) 2011 Thomas Akehurst
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package com.github.tomakehurst.wiremock.http;
 
 import com.github.tomakehurst.wiremock.common.FileSource;
 import com.github.tomakehurst.wiremock.extension.ResponseTransformer;
 import com.github.tomakehurst.wiremock.global.GlobalSettingsHolder;
+import com.github.tomakehurst.wiremock.stubbing.ServeEvent;
+import com.github.tomakehurst.wiremock.verification.LoggedRequest;
 import org.jmock.Mockery;
 import org.jmock.integration.junit4.JMock;
 import org.junit.Before;
@@ -12,6 +29,7 @@ import org.junit.runner.RunWith;
 import java.util.ArrayList;
 import java.util.List;
 
+import static com.github.tomakehurst.wiremock.matching.MockRequest.mockRequest;
 import static org.hamcrest.Matchers.is;
 import static org.junit.Assert.assertThat;
 
@@ -38,7 +56,7 @@ public class StubResponseRendererTest {
     public void endpointFixedDelayShouldOverrideGlobalDelay() throws Exception {
         globalSettingsHolder.get().setFixedDelay(1000);
 
-        Response response = stubResponseRenderer.render(createResponseDefinition(100));
+        Response response = stubResponseRenderer.render(createServeEvent(100));
 
         assertThat(response.getInitialDelay(), is(100L));
     }
@@ -47,7 +65,7 @@ public class StubResponseRendererTest {
     public void globalFixedDelayShouldNotBeOverriddenIfNoEndpointDelaySpecified() throws Exception {
         globalSettingsHolder.get().setFixedDelay(1000);
 
-        Response response = stubResponseRenderer.render(createResponseDefinition(null));
+        Response response = stubResponseRenderer.render(createServeEvent(null));
 
         assertThat(response.getInitialDelay(), is(1000L));
     }
@@ -56,14 +74,14 @@ public class StubResponseRendererTest {
     public void shouldSetGlobalFixedDelayOnResponse() throws Exception {
         globalSettingsHolder.get().setFixedDelay(1000);
 
-        Response response = stubResponseRenderer.render(createResponseDefinition(null));
+        Response response = stubResponseRenderer.render(createServeEvent(null));
 
         assertThat(response.getInitialDelay(), is(1000L));
     }
 
     @Test(timeout = EXECUTE_WITHOUT_SLEEP_MILLIS)
     public void shouldSetEndpointFixedDelayOnResponse() throws Exception {
-        Response response = stubResponseRenderer.render(createResponseDefinition(2000));
+        Response response = stubResponseRenderer.render(createServeEvent(2000));
 
         assertThat(response.getInitialDelay(), is(2000L));
     }
@@ -77,7 +95,7 @@ public class StubResponseRendererTest {
             }
         });
 
-        Response response = stubResponseRenderer.render(createResponseDefinition(null));
+        Response response = stubResponseRenderer.render(createServeEvent(null));
 
         assertThat(response.getInitialDelay(), is(123L));
     }
@@ -90,28 +108,30 @@ public class StubResponseRendererTest {
                 return 123;
             }
         });
-        Response response = stubResponseRenderer.render(createResponseDefinition(2000));
+        Response response = stubResponseRenderer.render(createServeEvent(2000));
         assertThat(response.getInitialDelay(), is(2123L));
     }
 
-    private ResponseDefinition createResponseDefinition(Integer fixedDelayMillis) {
-        return new ResponseDefinition(
-                0,
-                "",
-                "",
-                null,
-                "",
-                "",
-                null,
-                null,
-                fixedDelayMillis,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                true
+    private ServeEvent createServeEvent(Integer fixedDelayMillis) {
+        return ServeEvent.of(LoggedRequest.createFrom(mockRequest()),
+            new ResponseDefinition(
+                    0,
+                    "",
+                    "",
+                    null,
+                    "",
+                    "",
+                    null,
+                    null,
+                    fixedDelayMillis,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    true
+            )
         );
     }
 }

@@ -18,13 +18,16 @@ package com.github.tomakehurst.wiremock.extension.responsetemplating;
 import com.github.jknack.handlebars.Handlebars;
 import com.github.jknack.handlebars.Helper;
 import com.github.jknack.handlebars.Template;
+import com.github.jknack.handlebars.helper.AssignHelper;
+import com.github.jknack.handlebars.helper.ConditionalHelpers;
+import com.github.jknack.handlebars.helper.NumberHelper;
 import com.github.jknack.handlebars.helper.StringHelpers;
 import com.github.tomakehurst.wiremock.client.ResponseDefinitionBuilder;
 import com.github.tomakehurst.wiremock.common.FileSource;
 import com.github.tomakehurst.wiremock.common.TextFile;
 import com.github.tomakehurst.wiremock.extension.Parameters;
 import com.github.tomakehurst.wiremock.extension.ResponseDefinitionTransformer;
-import com.github.tomakehurst.wiremock.extension.responsetemplating.helpers.WiremockHelpers;
+import com.github.tomakehurst.wiremock.extension.responsetemplating.helpers.WireMockHelpers;
 import com.github.tomakehurst.wiremock.http.HttpHeader;
 import com.github.tomakehurst.wiremock.http.HttpHeaders;
 import com.github.tomakehurst.wiremock.http.Request;
@@ -40,8 +43,11 @@ import java.util.List;
 import java.util.Map;
 
 import static com.github.tomakehurst.wiremock.common.Exceptions.throwUnchecked;
+import static com.google.common.base.MoreObjects.firstNonNull;
 
 public class ResponseTemplateTransformer extends ResponseDefinitionTransformer {
+
+    public static final String NAME = "response-template";
 
     private final boolean global;
 
@@ -64,11 +70,23 @@ public class ResponseTemplateTransformer extends ResponseDefinitionTransformer {
         this.handlebars = handlebars;
 
         for (StringHelpers helper: StringHelpers.values()) {
-            this.handlebars.registerHelper(helper.name(), helper);
+            if (!helper.name().equals("now")) {
+                this.handlebars.registerHelper(helper.name(), helper);
+            }
         }
 
+        for (NumberHelper helper: NumberHelper.values()) {
+            this.handlebars.registerHelper(helper.name(), helper);
+        }
+        
+        for (ConditionalHelpers helper: ConditionalHelpers.values()) {
+        	this.handlebars.registerHelper(helper.name(), helper);
+        }
+
+        this.handlebars.registerHelper(AssignHelper.NAME, new AssignHelper());
+
         //Add all available wiremock helpers
-        for(WiremockHelpers helper: WiremockHelpers.values()){
+        for(WireMockHelpers helper: WireMockHelpers.values()){
             this.handlebars.registerHelper(helper.name(), helper);
         }
 
@@ -84,19 +102,23 @@ public class ResponseTemplateTransformer extends ResponseDefinitionTransformer {
 
     @Override
     public String getName() {
-        return "response-template";
+        return NAME;
     }
 
     @Override
     public ResponseDefinition transform(Request request, ResponseDefinition responseDefinition, FileSource files, Parameters parameters) {
         ResponseDefinitionBuilder newResponseDefBuilder = ResponseDefinitionBuilder.like(responseDefinition);
-        final ImmutableMap<String, RequestTemplateModel> model = ImmutableMap.of("request", RequestTemplateModel.from(request));
+        final ImmutableMap<String, Object> model = ImmutableMap.<String, Object>builder()
+                .put("parameters", firstNonNull(parameters, Collections.<String, Object>emptyMap()))
+                .put("request", RequestTemplateModel.from(request)).build();
 
-        if (responseDefinition.specifiesBodyContent()) {
+        if (responseDefinition.specifiesTextBodyContent()) {
             Template bodyTemplate = uncheckedCompileTemplate(responseDefinition.getBody());
             applyTemplatedResponseBody(newResponseDefBuilder, model, bodyTemplate);
         } else if (responseDefinition.specifiesBodyFile()) {
-            TextFile file = files.getTextFileNamed(responseDefinition.getBodyFileName());
+            Template filePathTemplate = uncheckedCompileTemplate(responseDefinition.getBodyFileName());
+            String compiledFilePath = uncheckedApplyTemplate(filePathTemplate, model);
+            TextFile file = files.getTextFileNamed(compiledFilePath);
             Template bodyTemplate = uncheckedCompileTemplate(file.readContentsAsString());
             applyTemplatedResponseBody(newResponseDefBuilder, model, bodyTemplate);
         }
@@ -128,7 +150,7 @@ public class ResponseTemplateTransformer extends ResponseDefinitionTransformer {
         return newResponseDefBuilder.build();
     }
 
-    private void applyTemplatedResponseBody(ResponseDefinitionBuilder newResponseDefBuilder, ImmutableMap<String, RequestTemplateModel> model, Template bodyTemplate) {
+    private void applyTemplatedResponseBody(ResponseDefinitionBuilder newResponseDefBuilder, ImmutableMap<String, Object> model, Template bodyTemplate) {
         String newBody = uncheckedApplyTemplate(bodyTemplate, model);
         newResponseDefBuilder.withBody(newBody);
     }

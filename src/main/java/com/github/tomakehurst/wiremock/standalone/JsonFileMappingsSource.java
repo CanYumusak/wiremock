@@ -15,10 +15,7 @@
  */
 package com.github.tomakehurst.wiremock.standalone;
 
-import com.github.tomakehurst.wiremock.common.AbstractFileSource;
-import com.github.tomakehurst.wiremock.common.FileSource;
-import com.github.tomakehurst.wiremock.common.SafeNames;
-import com.github.tomakehurst.wiremock.common.TextFile;
+import com.github.tomakehurst.wiremock.common.*;
 import com.github.tomakehurst.wiremock.stubbing.StubMapping;
 import com.github.tomakehurst.wiremock.stubbing.StubMappings;
 
@@ -28,6 +25,7 @@ import java.util.Map;
 import java.util.UUID;
 
 import static com.github.tomakehurst.wiremock.common.Json.write;
+import static com.github.tomakehurst.wiremock.common.Json.writePrivate;
 import static com.google.common.collect.Iterables.filter;
 
 public class JsonFileMappingsSource implements MappingsSource {
@@ -55,7 +53,7 @@ public class JsonFileMappingsSource implements MappingsSource {
 		if (mappingFileName == null) {
 			mappingFileName = SafeNames.makeSafeFileName(stubMapping);
 		}
-		mappingsFileSource.writeTextFile(mappingFileName, write(stubMapping));
+		mappingsFileSource.writeTextFile(mappingFileName, writePrivate(stubMapping));
         fileNameMap.put(stubMapping.getId(), mappingFileName);
 		stubMapping.setDirty(false);
 	}
@@ -82,10 +80,14 @@ public class JsonFileMappingsSource implements MappingsSource {
 		}
 		Iterable<TextFile> mappingFiles = filter(mappingsFileSource.listFilesRecursively(), AbstractFileSource.byFileExtension("json"));
 		for (TextFile mappingFile: mappingFiles) {
-            StubMapping mapping = StubMapping.buildFrom(mappingFile.readContentsAsString());
-            mapping.setDirty(false);
-			stubMappings.addMapping(mapping);
-			fileNameMap.put(mapping.getId(), mappingFile.getPath());
+			try {
+				StubMapping mapping = StubMapping.buildFrom(mappingFile.readContentsAsString());
+				mapping.setDirty(false);
+				stubMappings.addMapping(mapping);
+				fileNameMap.put(mapping.getId(), mappingFile.getPath());
+			} catch (JsonException e) {
+				throw new MappingFileException(mappingFile.getPath(), e.getErrors().first().getDetail());
+			}
 		}
 	}
 

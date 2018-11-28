@@ -59,7 +59,7 @@ public class WireMock {
 	private final Admin admin;
 	private final GlobalSettingsHolder globalSettingsHolder = new GlobalSettingsHolder();
 
-	private static ThreadLocal<WireMock> defaultInstance = new ThreadLocal<WireMock>(){
+	private static InheritableThreadLocal<WireMock> defaultInstance = new InheritableThreadLocal<WireMock>(){
             @Override
             protected WireMock initialValue() {
             	return WireMock.create().build();
@@ -329,7 +329,7 @@ public class WireMock {
     }
 
     public static UrlPattern anyUrl() {
-        return new UrlPattern(new AnythingPattern(), false);
+        return UrlPattern.ANY;
     }
 
 	public static CountMatchingStrategy lessThan(int expected) {
@@ -519,7 +519,7 @@ public class WireMock {
 		final RequestPattern requestPattern = requestPatternBuilder.build();
 
 		int actualCount;
-		if (requestPattern.hasCustomMatcher()) {
+		if (requestPattern.hasInlineCustomMatcher()) {
             List<LoggedRequest> requests = admin.findRequestsMatching(RequestPattern.everything()).getRequests();
             actualCount = from(requests).filter(thatMatch(requestPattern)).size();
         } else {
@@ -713,6 +713,14 @@ public class WireMock {
         return admin.snapshotRecord(spec.build()).getStubMappings();
     }
 
+    public static MultipartValuePatternBuilder aMultipart() {
+        return new MultipartValuePatternBuilder();
+    }
+
+    public static MultipartValuePatternBuilder aMultipart(String name) {
+        return new MultipartValuePatternBuilder(name);
+    }
+
     public static void startRecording(String targetBaseUrl) {
         defaultInstance.get().startStubRecording(targetBaseUrl);
     }
@@ -747,5 +755,21 @@ public class WireMock {
 
     public static RecordSpecBuilder recordSpec() {
         return new RecordSpecBuilder();
+    }
+
+    public List<StubMapping> findAllStubsByMetadata(StringValuePattern pattern) {
+	    return admin.findAllStubsByMetadata(pattern).getMappings();
+    }
+
+    public static List<StubMapping> findStubsByMetadata(StringValuePattern pattern) {
+	    return defaultInstance.get().findAllStubsByMetadata(pattern);
+    }
+
+    public void removeStubsByMetadataPattern(StringValuePattern pattern) {
+	    admin.removeStubsByMetadata(pattern);
+    }
+
+    public static void removeStubsByMetadata(StringValuePattern pattern) {
+	    defaultInstance.get().removeStubsByMetadataPattern(pattern);
     }
 }

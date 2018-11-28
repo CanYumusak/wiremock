@@ -20,6 +20,7 @@ import com.github.jknack.handlebars.Handlebars;
 import com.github.jknack.handlebars.Helper;
 import com.github.jknack.handlebars.Options;
 import com.github.tomakehurst.wiremock.client.ResponseDefinitionBuilder;
+import com.github.tomakehurst.wiremock.common.ClasspathFileSource;
 import com.github.tomakehurst.wiremock.extension.Parameters;
 import com.github.tomakehurst.wiremock.http.Request;
 import com.github.tomakehurst.wiremock.http.ResponseDefinition;
@@ -173,6 +174,18 @@ public class ResponseTemplateTransformerTest {
     }
 
     @Test
+    public void templatizeBodyFile() {
+        ResponseDefinition transformedResponseDef = transformFromResponseFile(mockRequest()
+                .url("/the/entire/path?name=Ram"),
+            aResponse().withBodyFile(
+                "/greet-{{request.query.name}}.txt"
+            )
+        );
+
+        assertThat(transformedResponseDef.getBody(), is("Hello Ram"));
+    }
+
+    @Test
     public void requestBody() {
         ResponseDefinition transformedResponseDef = transform(mockRequest()
                 .url("/things")
@@ -259,6 +272,23 @@ public class ResponseTemplateTransformerTest {
 
         assertThat(transformedResponseDef.getBody(), is("5"));
     }
+    
+    @Test
+    public void areConditionalHelpersLoaded() {
+
+        ResponseDefinition transformedResponseDef = transform(mockRequest()
+                .url("/things")
+                .body("fiver"),
+            aResponse().withBody(
+                "{{{eq 5 5 yes='y' no='n'}}}"
+            )
+        );
+
+        assertThat(transformedResponseDef.getBody(), is("y"));
+    }
+    
+    
+    
 
     @Test
     public void proxyBaseUrl() {
@@ -303,11 +333,217 @@ public class ResponseTemplateTransformerTest {
         assertThat(responseDefinition.getBody(), is("{\"test\": \"look at my 'single quotes'\"}"));
     }
 
+    @Test
+    public void transformerParametersAreAppliedToTemplate() throws Exception {
+        ResponseDefinition responseDefinition = transformer.transform(
+                mockRequest()
+                        .url("/json").
+                        body("{\"a\": {\"test\": \"look at my 'single quotes'\"}}"),
+                aResponse()
+                        .withBody("{\"test\": \"{{parameters.variable}}\"}").build(),
+                noFileSource(),
+                Parameters.one("variable", "some.value")
+        );
+
+        assertThat(responseDefinition.getBody(), is("{\"test\": \"some.value\"}"));
+    }
+
+    @Test
+    public void unknownTransformerParametersAreNotCausingIssues() throws Exception {
+        ResponseDefinition responseDefinition = transformer.transform(
+                mockRequest()
+                        .url("/json").
+                        body("{\"a\": {\"test\": \"look at my 'single quotes'\"}}"),
+                aResponse()
+                        .withBody("{\"test1\": \"{{parameters.variable}}\", \"test2\": \"{{parameters.unknown}}\"}").build(),
+                noFileSource(),
+                Parameters.one("variable", "some.value")
+        );
+
+        assertThat(responseDefinition.getBody(), is("{\"test1\": \"some.value\", \"test2\": \"\"}"));
+    }
+
+    @Test
+    public void requestLineScheme() {
+        ResponseDefinition transformedResponseDef = transform(mockRequest()
+                .scheme("https")
+                .host("my.domain.io")
+                .port(8080)
+                .url("/the/entire/path?query1=one&query2=two"),
+            aResponse().withBody(
+                "scheme: {{{request.requestLine.scheme}}}"
+            )
+        );
+
+        assertThat(transformedResponseDef.getBody(), is(
+            "scheme: https"
+        ));
+    }
+
+    @Test
+    public void requestLineHost() {
+        ResponseDefinition transformedResponseDef = transform(mockRequest()
+                .scheme("https")
+                .host("my.domain.io")
+                .port(8080)
+                .url("/the/entire/path?query1=one&query2=two"),
+            aResponse().withBody(
+                "host: {{{request.requestLine.host}}}"
+            )
+        );
+
+        assertThat(transformedResponseDef.getBody(), is(
+            "host: my.domain.io"
+        ));
+    }
+
+    @Test
+    public void requestLinePort() {
+        ResponseDefinition transformedResponseDef = transform(mockRequest()
+                .scheme("https")
+                .host("my.domain.io")
+                .port(8080)
+                .url("/the/entire/path?query1=one&query2=two"),
+            aResponse().withBody(
+                "port: {{{request.requestLine.port}}}"
+            )
+        );
+
+        assertThat(transformedResponseDef.getBody(), is(
+            "port: 8080"
+        ));
+    }
+
+    @Test
+    public void requestLinePath() {
+        ResponseDefinition transformedResponseDef = transform(mockRequest()
+                .scheme("https")
+                .host("my.domain.io")
+                .port(8080)
+                .url("/the/entire/path?query1=one&query2=two"),
+            aResponse().withBody(
+                "path: {{{request.requestLine.path}}}"
+            )
+        );
+
+        assertThat(transformedResponseDef.getBody(), is(
+            "path: /the/entire/path?query1=one&query2=two"
+        ));
+    }
+
+    @Test
+    public void requestLineBaseUrlNonStandardPort() {
+        ResponseDefinition transformedResponseDef = transform(mockRequest()
+                .scheme("https")
+                .host("my.domain.io")
+                .port(8080)
+                .url("/the/entire/path?query1=one&query2=two"),
+            aResponse().withBody(
+                "baseUrl: {{{request.requestLine.baseUrl}}}"
+            )
+        );
+
+        assertThat(transformedResponseDef.getBody(), is(
+            "baseUrl: https://my.domain.io:8080"
+        ));
+    }
+
+    @Test
+    public void requestLineBaseUrlHttp() {
+        ResponseDefinition transformedResponseDef = transform(mockRequest()
+                .scheme("http")
+                .host("my.domain.io")
+                .port(80)
+                .url("/the/entire/path?query1=one&query2=two"),
+            aResponse().withBody(
+                "baseUrl: {{{request.requestLine.baseUrl}}}"
+            )
+        );
+
+        assertThat(transformedResponseDef.getBody(), is(
+            "baseUrl: http://my.domain.io"
+        ));
+    }
+
+    @Test
+    public void requestLineBaseUrlHttps() {
+        ResponseDefinition transformedResponseDef = transform(mockRequest()
+                .scheme("https")
+                .host("my.domain.io")
+                .port(443)
+                .url("/the/entire/path?query1=one&query2=two"),
+            aResponse().withBody(
+                "baseUrl: {{{request.requestLine.baseUrl}}}"
+            )
+        );
+
+        assertThat(transformedResponseDef.getBody(), is(
+            "baseUrl: https://my.domain.io"
+        ));
+    }
+
+    @Test
+    public void requestLinePathSegment() {
+        ResponseDefinition transformedResponseDef = transform(mockRequest()
+                .scheme("https")
+                .host("my.domain.io")
+                .port(8080)
+                .url("/the/entire/path?query1=one&query2=two"),
+            aResponse().withBody(
+                "path segments: {{{request.requestLine.pathSegments}}}"
+            )
+        );
+
+        assertThat(transformedResponseDef.getBody(), is(
+            "path segments: /the/entire/path"
+        ));
+    }
+
+    @Test
+    public void requestLinePathSegment0() {
+        ResponseDefinition transformedResponseDef = transform(mockRequest()
+                .scheme("https")
+                .host("my.domain.io")
+                .port(8080)
+                .url("/the/entire/path?query1=one&query2=two"),
+            aResponse().withBody(
+                "path segments 0: {{{request.requestLine.pathSegments.[0]}}}"
+            )
+        );
+
+        assertThat(transformedResponseDef.getBody(), is(
+            "path segments 0: the"
+        ));
+    }
+
+    @Test
+    public void requestLinequeryParameters() {
+        ResponseDefinition transformedResponseDef = transform(mockRequest()
+                .url("/things?multi_param=one&multi_param=two&single-param=1234"),
+            aResponse().withBody(
+                "Multi 1: {{request.requestLine.query.multi_param.[0]}}, Multi 2: {{request.requestLine.query.multi_param.[1]}}, Single 1: {{request.requestLine.query.single-param}}"
+            )
+        );
+
+        assertThat(transformedResponseDef.getBody(), is(
+            "Multi 1: one, Multi 2: two, Single 1: 1234"
+        ));
+    }
+
     private ResponseDefinition transform(Request request, ResponseDefinitionBuilder responseDefinitionBuilder) {
         return transformer.transform(
             request,
             responseDefinitionBuilder.build(),
             noFileSource(),
+            Parameters.empty()
+        );
+    }
+
+    private ResponseDefinition transformFromResponseFile(Request request, ResponseDefinitionBuilder responseDefinitionBuilder) {
+        return transformer.transform(
+            request,
+            responseDefinitionBuilder.build(),
+            new ClasspathFileSource(this.getClass().getClassLoader().getResource("templates").getPath()),
             Parameters.empty()
         );
     }

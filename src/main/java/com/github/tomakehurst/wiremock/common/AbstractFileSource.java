@@ -15,6 +15,7 @@
  */
 package com.github.tomakehurst.wiremock.common;
 
+import com.github.tomakehurst.wiremock.security.NotAuthorisedException;
 import com.google.common.base.Function;
 import com.google.common.base.Predicate;
 import com.google.common.io.Files;
@@ -23,8 +24,6 @@ import java.io.File;
 import java.io.FileFilter;
 import java.io.IOException;
 import java.net.URI;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.List;
 
 import static com.google.common.base.Charsets.UTF_8;
@@ -43,11 +42,13 @@ public abstract class AbstractFileSource implements FileSource {
 
     @Override
     public BinaryFile getBinaryFileNamed(final String name) {
+        assertFilePathIsUnderRoot(name);
         return new BinaryFile(new File(rootDirectory, name).toURI());
     }
 
     @Override
     public TextFile getTextFileNamed(String name) {
+        assertFilePathIsUnderRoot(name);
         return new TextFile(new File(rootDirectory, name).toURI());
     }
 
@@ -120,16 +121,15 @@ public abstract class AbstractFileSource implements FileSource {
 
     private File writableFileFor(String name) {
         assertExistsAndIsDirectory();
+        assertFilePathIsUnderRoot(name);
         assertWritable();
-        final Path writablePath = Paths.get(name);
-        if (writablePath.isAbsolute()) {
-            if (!writablePath.startsWith(rootDirectory.toPath().toAbsolutePath())) {
-                throw new IllegalArgumentException(name + " is an absolute path not under the root directory");
-            }
-            return writablePath.toFile();
+        final File filePath = new File(name);
+
+        if (filePath.isAbsolute()) {
+            return filePath;
         } else {
             // Convert to absolute path
-            return rootDirectory.toPath().resolve(writablePath).toFile();
+            return new File(rootDirectory, name);
         }
     }
 
@@ -145,6 +145,24 @@ public abstract class AbstractFileSource implements FileSource {
         if (readOnly()) {
             throw new UnsupportedOperationException("Can't write to read only file sources");
         }
+    }
+
+    private void assertFilePathIsUnderRoot(String path) {
+        try {
+            String rootPath = rootDirectory.getCanonicalPath();
+
+            File file = new File(path);
+            String filePath = file.isAbsolute() ?
+                new File(path).getCanonicalPath() :
+                new File(rootDirectory, path).getCanonicalPath();
+
+            if (!filePath.startsWith(rootPath)) {
+                throw new NotAuthorisedException("Access to file " + path + " is not permitted");
+            }
+        } catch (IOException ioe) {
+            throw new NotAuthorisedException("File " + path + " cannot be accessed", ioe);
+        }
+
     }
 
     private void writeTextFileAndTranslateExceptions(String contents, File toFile) {
