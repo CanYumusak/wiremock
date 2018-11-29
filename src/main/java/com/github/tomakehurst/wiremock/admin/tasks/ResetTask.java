@@ -15,17 +15,28 @@
  */
 package com.github.tomakehurst.wiremock.admin.tasks;
 
+import com.fasterxml.jackson.core.JsonParseException;
 import com.github.tomakehurst.wiremock.admin.AdminTask;
 import com.github.tomakehurst.wiremock.admin.model.PathParams;
+import com.github.tomakehurst.wiremock.common.ClientError;
+import com.github.tomakehurst.wiremock.common.Errors;
 import com.github.tomakehurst.wiremock.core.Admin;
 import com.github.tomakehurst.wiremock.http.Request;
 import com.github.tomakehurst.wiremock.http.ResponseDefinition;
+
+import static com.github.tomakehurst.wiremock.client.ResponseDefinitionBuilder.jsonResponse;
 
 public class ResetTask implements AdminTask {
 
     @Override
     public ResponseDefinition execute(Admin admin, Request request, PathParams pathParams) {
-        admin.resetAll();
-        return ResponseDefinition.ok();
+        try {
+            admin.resetAll();
+            return ResponseDefinition.ok();
+        } catch (ClientError error) {
+            return jsonResponse(error.getErrors(), 500);
+        } catch (Exception exception) {
+            return jsonResponse(Errors.single(90, "Error while parsing JSON: " + exception.getMessage()), 500);
+        }
     }
 }
