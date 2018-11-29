@@ -49,7 +49,7 @@ public class AdminRequestHandler extends AbstractRequestHandler {
 	@Override
 	public ServeEvent handleRequest(Request request) {
 	    if (requireHttps && !URI.create(request.getAbsoluteUrl()).getScheme().equals("https")) {
-            notifier().info("HTTPS is required for admin requests, sending upgrade redirect");
+            notifier().verbose("HTTPS is required for admin requests, sending upgrade redirect");
             return ServeEvent.of(
                 LoggedRequest.createFrom(request),
                 ResponseDefinition.notPermitted("HTTPS is required for accessing the admin API")
@@ -57,14 +57,14 @@ public class AdminRequestHandler extends AbstractRequestHandler {
         }
 
 	    if (!authenticator.authenticate(request)) {
-            notifier().info("Authentication failed for " + request.getMethod() + " " + request.getUrl());
+            notifier().verbose("Authentication failed for " + request.getMethod() + " " + request.getUrl());
             return ServeEvent.of(
                 LoggedRequest.createFrom(request),
                 ResponseDefinition.notAuthorised()
             );
         }
 
-        notifier().info("Admin request received:\n" + formatRequest(request));
+        notifier().verbose("Admin request received:\n" + formatRequest(request));
         String path = URI.create(withoutAdminRoot(request.getUrl())).getPath();
 
         try {

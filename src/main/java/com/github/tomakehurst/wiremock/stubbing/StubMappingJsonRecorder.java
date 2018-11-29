@@ -55,10 +55,10 @@ public class StubMappingJsonRecorder implements RequestListener {
         RequestPattern requestPattern = buildRequestPatternFrom(request);
 
         if (requestNotAlreadyReceived(requestPattern) && response.isFromProxy()) {
-            notifier().info(String.format("Recording mappings for %s", request.getUrl()));
+            notifier().verbose(String.format("Recording mappings for %s", request.getUrl()));
             writeToMappingAndBodyFile(request, response, requestPattern);
         } else {
-            notifier().info(String.format("Not recording mapping for %s as this has already been received", request.getUrl()));
+            notifier().verbose(String.format("Not recording mapping for %s as this has already been received", request.getUrl()));
         }
     }
 

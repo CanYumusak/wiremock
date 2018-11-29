@@ -74,7 +74,7 @@ public class AdminRequestHandlerTest {
                 "}";
 
         context.checking(new Expectations() {{
-            one(notifier).info(with(allOf(
+            one(notifier).verbose(with(allOf(
                     containsString("Admin request received:\n127.0.0.1 - POST /mappings\n"),
                     containsString(postHeaderABCName + ": [" + postHeaderABCValue + "]\n"),
                     containsString(postBody))));

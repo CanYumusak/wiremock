@@ -81,7 +81,9 @@ public class JsonFileMappingsSource implements MappingsSource {
 		Iterable<TextFile> mappingFiles = filter(mappingsFileSource.listFilesRecursively(), AbstractFileSource.byFileExtension("json"));
 		for (TextFile mappingFile: mappingFiles) {
 			try {
-				StubMapping mapping = StubMapping.buildFrom(mappingFile.readContentsAsString());
+				String path = mappingFile.getPath();
+				String relativePath = path.replaceAll(mappingsFileSource.getPath(), "");
+				StubMapping mapping = StubMapping.buildFrom(mappingFile.readContentsAsString(), relativePath);
 				mapping.setDirty(false);
 				stubMappings.addMapping(mapping);
 				fileNameMap.put(mapping.getId(), mappingFile.getPath());

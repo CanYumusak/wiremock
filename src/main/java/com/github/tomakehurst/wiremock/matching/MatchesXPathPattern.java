@@ -21,7 +21,6 @@ import com.fasterxml.jackson.databind.annotation.JsonSerialize;
 import com.github.tomakehurst.wiremock.common.SilentErrorHandler;
 import com.github.tomakehurst.wiremock.common.Xml;
 import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.Sets;
 import org.custommonkey.xmlunit.NamespaceContext;
 import org.custommonkey.xmlunit.SimpleNamespaceContext;
 import org.custommonkey.xmlunit.XMLUnit;
@@ -129,14 +128,14 @@ public class MatchesXPathPattern extends PathPattern {
             }
             return simpleXpathEngine.getMatchingNodes(expectedValue, inDocument);
         } catch (SAXException e) {
-            notifier().info(String.format(
+            notifier().verbose(String.format(
                 "Warning: failed to parse the XML document. Reason: %s\nXML: %s", e.getMessage(), value));
             return null;
         } catch (IOException e) {
-            notifier().info(e.getMessage());
+            notifier().verbose(e.getMessage());
             return null;
         } catch (XpathException e) {
-            notifier().info("Warning: failed to evaluate the XPath expression " + expectedValue);
+            notifier().verbose("Warning: failed to evaluate the XPath expression " + expectedValue);
             return null;
         } catch (Exception e) {
             return throwUnchecked(e, NodeList.class);

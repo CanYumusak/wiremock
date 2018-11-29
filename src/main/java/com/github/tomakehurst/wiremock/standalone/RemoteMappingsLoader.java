@@ -45,8 +45,11 @@ public class RemoteMappingsLoader {
 
     public void load() {
         Iterable<TextFile> mappingFiles = filter(mappingsFileSource.listFilesRecursively(), byFileExtension("json"));
+
         for (TextFile mappingFile : mappingFiles) {
-            StubMapping mapping = StubMapping.buildFrom(mappingFile.readContentsAsString());
+            String path = mappingFile.getPath();
+            String relativePath = path.replaceAll(mappingsFileSource.getPath(), "");
+            StubMapping mapping = StubMapping.buildFrom(mappingFile.readContentsAsString(), relativePath);
             convertBodyFromFileIfNecessary(mapping);
             wireMock.register(mapping);
         }

@@ -29,10 +29,15 @@ public class Slf4jNotifier implements Notifier {
     }
 
     @Override
-    public void info(String message) {
+    public void verbose(String message) {
         if (verbose) {
             log.info(message);
         }
+    }
+
+    @Override
+    public void info(String message) {
+        log.info(message);
     }
 
     @Override

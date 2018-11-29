@@ -48,9 +48,9 @@ public class TestNotifier implements Notifier {
     }
 
     @Override
-    public void info(String message) {
+    public void verbose(String message) {
         this.info.add(message);
-        consoleNotifier.info(message);
+        consoleNotifier.verbose(message);
     }
 
     @Override

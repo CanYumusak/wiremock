@@ -54,6 +54,7 @@ public class StubMapping {
     private Metadata metadata;
 
 	private long insertionIndex;
+	private String filePath = null;
 	private boolean isDirty = true;
 
 	public StubMapping(RequestPattern requestPattern, ResponseDefinition response) {
@@ -68,8 +69,14 @@ public class StubMapping {
 	public static final StubMapping NOT_CONFIGURED =
 	    new StubMapping(null, ResponseDefinition.notConfigured());
 
+    public static StubMapping buildFrom(String mappingSpecJson, String path) {
+		StubMapping stubMapping = Json.read(mappingSpecJson, StubMapping.class);
+		stubMapping.filePath = path;
+		return stubMapping;
+    }
+
     public static StubMapping buildFrom(String mappingSpecJson) {
-        return Json.read(mappingSpecJson, StubMapping.class);
+		return Json.read(mappingSpecJson, StubMapping.class);
     }
 
     public static String buildJsonStringFor(StubMapping mapping) {
@@ -128,7 +135,11 @@ public class StubMapping {
 		this.response = response;
 	}
 
-    @Override
+	public String getFilePath() {
+		return filePath;
+	}
+
+	@Override
 	public String toString() {
 		return Json.write(this);
 	}

@@ -35,10 +35,15 @@ public class LocalNotifier {
 	private static class NullNotifier implements Notifier {
 
 		@Override
-		public void info(String message) {
+		public void verbose(String message) {
 		}
 
-		@Override
+        @Override
+        public void info(String message) {
+
+        }
+
+        @Override
 		public void error(String message) {
 		}
 

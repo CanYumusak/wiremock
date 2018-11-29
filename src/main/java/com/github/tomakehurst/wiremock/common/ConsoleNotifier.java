@@ -29,15 +29,20 @@ public class ConsoleNotifier implements Notifier {
     public ConsoleNotifier(boolean verbose) {
         this.verbose = verbose;
         if (verbose) {
-            info("Verbose logging enabled");
+            verbose("Verbose logging enabled");
+        }
+    }
+
+    @Override
+    public void verbose(String message) {
+        if (verbose) {
+            out.println(formatMessage(message));
         }
     }
 
     @Override
     public void info(String message) {
-        if (verbose) {
-            out.println(formatMessage(message));
-        }
+        out.println(formatMessage(message));
     }
 
     @Override

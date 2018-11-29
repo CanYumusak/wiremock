@@ -325,7 +325,7 @@ public class Examples extends AcceptanceTestBase {
             .withRequestBody(matchingXPath("//search-results"))
             .withMultipartRequestBody(
                 aMultipart()
-                    .withName("info")
+                    .withName("verbose")
                     .withHeader("Content-Type", containing("charset"))
                     .withBody(equalToJson("{}"))
             )
@@ -340,7 +340,7 @@ public class Examples extends AcceptanceTestBase {
             .withRequestBody(matchingXPath("//search-results"))
             .withMultipartRequestBody(
                 aMultipart()
-                    .withName("info")
+                    .withName("verbose")
                     .withHeader("Content-Type", containing("charset"))
                     .withBody(equalToJson("{}"))
             )

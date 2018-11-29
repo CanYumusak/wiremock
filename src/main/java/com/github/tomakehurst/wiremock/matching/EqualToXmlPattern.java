@@ -92,7 +92,7 @@ public class EqualToXmlPattern extends StringValuePattern {
 
                     return !diff.hasDifferences();
                 } catch (XMLUnitException e) {
-                    notifier().info("Failed to process XML. " + e.getMessage() +
+                    notifier().verbose("Failed to process XML. " + e.getMessage() +
                         "\nExpected:\n" + expectedValue +
                         "\n\nActual:\n" + value);
                     return false;
@@ -129,13 +129,13 @@ public class EqualToXmlPattern extends StringValuePattern {
                         .withDocumentBuilderFactory(Xml.newDocumentBuilderFactory())
                         .build();
                 } catch (XMLUnitException e) {
-                    notifier().info("Failed to process XML. " + e.getMessage() +
+                    notifier().verbose("Failed to process XML. " + e.getMessage() +
                         "\nExpected:\n" + expectedValue +
                         "\n\nActual:\n" + value);
                     return 1.0;
                 }
 
-                notifier().info(
+                notifier().verbose(
                     Joiner.on("\n").join(diff.getDifferences())
                 );
 

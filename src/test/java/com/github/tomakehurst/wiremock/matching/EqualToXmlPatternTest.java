@@ -296,7 +296,7 @@ public class EqualToXmlPatternTest {
     private void expectInfoNotification(final String message) {
         final Notifier notifier = context.mock(Notifier.class);
         context.checking(new Expectations() {{
-            one(notifier).info(with(containsString(message)));
+            one(notifier).verbose(with(containsString(message)));
         }});
         LocalNotifier.set(notifier);
     }

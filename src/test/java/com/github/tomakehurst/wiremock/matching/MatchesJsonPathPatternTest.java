@@ -15,7 +15,6 @@
  */
 package com.github.tomakehurst.wiremock.matching;
 
-import com.fasterxml.jackson.databind.JsonMappingException;
 import com.github.tomakehurst.wiremock.client.WireMock;
 import com.github.tomakehurst.wiremock.common.Json;
 import com.github.tomakehurst.wiremock.common.JsonException;
@@ -321,7 +320,7 @@ public class MatchesJsonPathPatternTest {
     private void expectInfoNotification(final String message) {
         final Notifier notifier = context.mock(Notifier.class);
         context.checking(new Expectations() {{
-            one(notifier).info(message);
+            one(notifier).verbose(message);
         }});
         LocalNotifier.set(notifier);
     }

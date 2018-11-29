@@ -33,4 +33,8 @@ public class TextFile extends BinaryFile {
     public String getPath() {
         return new File(getUri().getSchemeSpecificPart()).getPath();
     }
+
+    public File getFile() {
+        return new File(getUri().getSchemeSpecificPart());
+    }
 }

@@ -51,7 +51,7 @@ public abstract class AbstractRequestHandler implements RequestHandler, RequestE
 		ServeEvent completedServeEvent = serveEvent.complete(response, (int) stopwatch.elapsed(MILLISECONDS));
 
 		if (logRequests()) {
-			notifier().info("Request received:\n" +
+			notifier().verbose("Request received:\n" +
 					formatRequest(request) +
 					"\n\nMatched response definition:\n" + responseDefinition +
 					"\n\nResponse:\n" + response);

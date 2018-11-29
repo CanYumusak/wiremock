@@ -20,8 +20,6 @@ import com.github.tomakehurst.wiremock.common.ProxySettings;
 import org.apache.http.HttpHost;
 import org.apache.http.auth.AuthScope;
 import org.apache.http.auth.UsernamePasswordCredentials;
-import org.apache.http.client.AuthenticationStrategy;
-import org.apache.http.client.CredentialsProvider;
 import org.apache.http.client.config.RequestConfig;
 import org.apache.http.client.methods.*;
 import org.apache.http.config.SocketConfig;
@@ -134,7 +132,7 @@ public class HttpClientFactory {
     }
 
     public static HttpUriRequest getHttpRequestFor(RequestMethod method, String url) {
-        notifier().info("Proxying: " + method + " " + url);
+        notifier().verbose("Proxying: " + method + " " + url);
 
         if (method.equals(GET))
             return new HttpGet(url);

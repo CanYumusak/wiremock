@@ -69,7 +69,7 @@ public class MatchesJsonPathPattern extends PathPattern {
             String message = String.format(
                 "Warning: JSON path expression '%s' failed to match document '%s' because %s",
                 expectedValue, value, error);
-            notifier().info(message);
+            notifier().verbose(message);
 
             return MatchResult.noMatch();
         }
@@ -92,7 +92,7 @@ public class MatchesJsonPathPattern extends PathPattern {
             String message = String.format(
                 "Warning: JSON path expression '%s' failed to match document '%s' because %s",
                 expectedValue, value, error);
-            notifier().info(message);
+            notifier().verbose(message);
 
             return MatchResult.noMatch();
         }

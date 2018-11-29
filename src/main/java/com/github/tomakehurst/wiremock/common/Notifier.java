@@ -19,6 +19,7 @@ public interface Notifier {
 	
 	public static final String KEY = "Notifier";
 
+	void verbose(String message);
 	void info(String message);
 	void error(String message);
 	void error(String message, Throwable t);
